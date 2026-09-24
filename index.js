@@ -1,40 +1,46 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config(); // Ensures environment variables load first
+
 import express from 'express';
-import pg from 'pg';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import http from 'http';
 import { Server } from 'socket.io';
-
-const { Pool } = pg;
+import pool from './config/db.js';
 
 const app = express();
 const server = http.createServer(app);
 
+// Allow local development and production URLs dynamically
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.CLIENT_URL // Add your frontend Render/Vercel URL in your .env
+].filter(Boolean);
+
 // ✅ Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST']
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
 
-app.use(cors());
+// ✅ Middleware
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
-// Remove the hardcoded Pool setup and import your db.js configuration instead
-import pool from './config/db.js';
-
+// ✅ Database Connection Test
 pool.connect((err, client, release) => {
   if (err) {
-    console.error('Database connection failed:', err);
+    console.error('❌ Database connection failed:', err.stack);
   } else {
-    console.log(' Connected to PostgreSQL!');
+    console.log('✅ Connected to PostgreSQL!');
     release();
   }
 });
 
+// ✅ Nodemailer Setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -939,6 +945,41 @@ app.get('/api/analytics/all', async (req, res) => {
     const clearance = await pool.query(`SELECT clearance_status, COUNT(*) as count FROM students WHERE archived = false GROUP BY clearance_status`);
     res.json({ students: students.rows, clearance: clearance.rows });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ───── UNIFIED LOGIN ROUTE ─────
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  const roles = [
+    { table: 'students', role: 'student' },
+    { table: 'supervisors', role: 'supervisor' },
+    { table: 'deans', role: 'dean' },
+    { table: 'superadmins', role: 'superadmin' },
+  ];
+
+  try {
+    for (const { table, role } of roles) {
+      const result = await pool.query(`SELECT * FROM ${table} WHERE email = $1`, [email]);
+      
+      if (result.rows.length > 0) {
+        const user = result.rows[0];
+        const valid = await bcrypt.compare(password, user.password);
+
+        if (valid) {
+          delete user.password; // Omit password hash from response payload
+          return res.json({ message: 'Login successful!', user, role });
+        } else {
+          return res.status(401).json({ error: 'Invalid email or password' });
+        }
+      }
+    }
+
+    return res.status(401).json({ error: 'Invalid email or password' });
+  } catch (err) {
+    console.error('Unified login error:', err);
     res.status(500).json({ error: err.message });
   }
 });
