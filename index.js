@@ -23,13 +23,8 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'OJT_DB',
-  password: 'laurencemasong',
-  port: 5432,
-});
+// Remove the hardcoded Pool setup and import your db.js configuration instead
+const pool = require('./db'); // Adjust path if db.js is in a subfolder like './config/db'
 
 pool.connect((err, client, release) => {
   if (err) {
