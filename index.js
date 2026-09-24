@@ -24,7 +24,7 @@ app.use(cors());
 app.use(express.json());
 
 // Remove the hardcoded Pool setup and import your db.js configuration instead
-const pool = require('./config/db'); // or require('./db/db')
+import pool from './db.js'; // Adjust relative path if db.js is inside a subfolder, e.g. './config/db.js'
 
 pool.connect((err, client, release) => {
   if (err) {

@@ -1,5 +1,11 @@
-const { Pool } = require('pg');
-require('dotenv').config();
+import pg from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const { Pool } = pg;
+
+console.log("🔍 DATABASE_URL detected?", process.env.DATABASE_URL ? "YES" : "NO - Missing DATABASE_URL!");
 
 // Prioritize DATABASE_URL if available (Render/Neon), otherwise use local env variables
 const pool = new Pool(
@@ -29,4 +35,4 @@ pool.connect((err, client, release) => {
   }
 });
 
-module.exports = pool;
+export default pool;
