@@ -1,7 +1,8 @@
-const express = require('express');
+import express from 'express';
+import pool from '../config/db.js';
+import { authMiddleware, requireRole } from '../middleware/auth.js';
+
 const router = express.Router();
-const pool = require('../config/db');
-const { authMiddleware, requireRole } = require('../middleware/auth');
 
 router.use(authMiddleware);
 
@@ -150,4 +151,4 @@ router.put('/logs/:id', requireRole('supervisor', 'dean'), async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

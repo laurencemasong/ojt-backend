@@ -123,9 +123,9 @@ app.post('/api/students/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM students WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid email or password' });
     const valid = await bcrypt.compare(password, result.rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
     res.json({ message: 'Login successful!', student: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -291,9 +291,9 @@ app.post('/api/supervisors/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM supervisors WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Supervisor not found' });
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid email or password' });
     const valid = await bcrypt.compare(password, result.rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
     res.json({ message: 'Login successful!', supervisor: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -352,9 +352,9 @@ app.post('/api/deans/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM deans WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Dean not found' });
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid email or password' });
     const valid = await bcrypt.compare(password, result.rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
     res.json({ message: 'Login successful!', dean: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -422,9 +422,9 @@ app.post('/api/superadmin/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM superadmins WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'SuperAdmin not found' });
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid email or password' });
     const valid = await bcrypt.compare(password, result.rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
     res.json({ message: 'Login successful!', superadmin: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
