@@ -949,10 +949,16 @@ app.get('/api/analytics/all', async (req, res) => {
   }
 });
 
-// ───── UNIFIED LOGIN ROUTE ─────
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
+
   const roles = [
     { table: 'students', role: 'student' },
     { table: 'supervisors', role: 'supervisor' },
@@ -962,25 +968,50 @@ app.post('/api/login', async (req, res) => {
 
   try {
     for (const { table, role } of roles) {
-      const result = await pool.query(`SELECT * FROM ${table} WHERE email = $1`, [email]);
-      
+      // Case-insensitive query using LOWER()
+      const result = await pool.query(
+        `SELECT * FROM ${table} WHERE LOWER(email) = LOWER($1)`,
+        [cleanEmail]
+      );
+
       if (result.rows.length > 0) {
         const user = result.rows[0];
-        const valid = await bcrypt.compare(password, user.password);
+        console.log(`[LOGIN DEBUG] Found user in '${table}': ${user.email}`);
 
-        if (valid) {
-          delete user.password; // Omit password hash from response payload
+        // Handle case where password column name might differ or be missing
+        const dbPassword = user.password;
+
+        if (!dbPassword) {
+          console.error(`[LOGIN DEBUG] Account in '${table}' has no password string set.`);
+          return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+
+        let isValid = false;
+
+        // Check if password in DB is a bcrypt hash ($2a$ or $2b$)
+        if (dbPassword.startsWith('$2a$') || dbPassword.startsWith('$2b$')) {
+          isValid = await bcrypt.compare(cleanPassword, dbPassword);
+        } else {
+          // Fallback for raw/plaintext passwords during development
+          isValid = (cleanPassword === dbPassword);
+        }
+
+        if (isValid) {
+          delete user.password; // Strip password before sending response
           return res.json({ message: 'Login successful!', user, role });
         } else {
-          return res.status(401).json({ error: 'Invalid email or password' });
+          console.warn(`[LOGIN DEBUG] Password mismatch for ${cleanEmail} in table '${table}'`);
+          return res.status(401).json({ error: 'Invalid email or password.' });
         }
       }
     }
 
-    return res.status(401).json({ error: 'Invalid email or password' });
+    console.warn(`[LOGIN DEBUG] No account found across any table for email: ${cleanEmail}`);
+    return res.status(401).json({ error: 'Invalid email or password.' });
+
   } catch (err) {
-    console.error('Unified login error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('❌ Unified login server error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
