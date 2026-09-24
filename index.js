@@ -1,29 +1,67 @@
 import dotenv from 'dotenv';
-dotenv.config(); // Ensures environment variables load first
-
+dotenv.config();
 import express from 'express';
+import pkg from 'pg';
+const { Pool } = pkg;
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import http from 'http';
 import { Server } from 'socket.io';
-import pool from './config/db.js';
+import authRoutes from './routes/auth.js';
+import studentRoutes from './routes/students.js';
+import supervisorRoutes from './routes/supervisor.js';
 
+// 1. Initialize Express & Database Pool
 const app = express();
+
+export const pool = new Pool({
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'OJT_DB',
+  password: process.env.DB_PASSWORD || 'laurencemasong',
+  port: process.env.DB_PORT || 5432,
+  // Add SSL configuration below:
+  ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost' 
+    ? { rejectUnauthorized: false } 
+    : false,
+});
+
+// 2. HTTP Server & Socket.IO Setup
 const server = http.createServer(app);
+const allowedOrigins = ['http://localhost:5173'];
 
-// Allow local development and production URLs dynamically
-const allowedOrigins = [
-  'http://localhost:5173',
-  process.env.CLIENT_URL // Add your frontend Render/Vercel URL in your .env
-].filter(Boolean);
-
-// ✅ Socket.io setup
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
-  }
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  },
+});
+
+// Attach io to req object so routes can emit events if needed
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// 3. Middlewares
+app.use(
+  cors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+  })
+);
+app.use(express.json());
+
+// 4. Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/supervisor', supervisorRoutes);
+
+// Health check
+app.get('/', (req, res) => {
+  res.json({ message: '✅ OJT Backend is running!' });
 });
 
 // ✅ Middleware
@@ -938,85 +976,18 @@ app.get('/api/analytics/course/:course', async (req, res) => {
   }
 });
 
-// ✅ FIXED: Completed cutoff route
-app.get('/api/analytics/all', async (req, res) => {
-  try {
-    const students = await pool.query(`SELECT name, course, rendered_hours, total_hours, clearance_status FROM students WHERE archived = false`);
-    const clearance = await pool.query(`SELECT clearance_status, COUNT(*) as count FROM students WHERE archived = false GROUP BY clearance_status`);
-    res.json({ students: students.rows, clearance: clearance.rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// 1. Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/supervisor', supervisorRoutes);
+
+// 2. Socket.io Handlers
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
 });
 
-app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
-  }
-
-  const cleanEmail = email.trim().toLowerCase();
-  const cleanPassword = password.trim();
-
-  const roles = [
-    { table: 'students', role: 'student' },
-    { table: 'supervisors', role: 'supervisor' },
-    { table: 'deans', role: 'dean' },
-    { table: 'superadmins', role: 'superadmin' },
-  ];
-
-  try {
-    for (const { table, role } of roles) {
-      // Case-insensitive query using LOWER()
-      const result = await pool.query(
-        `SELECT * FROM ${table} WHERE LOWER(email) = LOWER($1)`,
-        [cleanEmail]
-      );
-
-      if (result.rows.length > 0) {
-        const user = result.rows[0];
-        console.log(`[LOGIN DEBUG] Found user in '${table}': ${user.email}`);
-
-        // Handle case where password column name might differ or be missing
-        const dbPassword = user.password;
-
-        if (!dbPassword) {
-          console.error(`[LOGIN DEBUG] Account in '${table}' has no password string set.`);
-          return res.status(401).json({ error: 'Invalid email or password.' });
-        }
-
-        let isValid = false;
-
-        // Check if password in DB is a bcrypt hash ($2a$ or $2b$)
-        if (dbPassword.startsWith('$2a$') || dbPassword.startsWith('$2b$')) {
-          isValid = await bcrypt.compare(cleanPassword, dbPassword);
-        } else {
-          // Fallback for raw/plaintext passwords during development
-          isValid = (cleanPassword === dbPassword);
-        }
-
-        if (isValid) {
-          delete user.password; // Strip password before sending response
-          return res.json({ message: 'Login successful!', user, role });
-        } else {
-          console.warn(`[LOGIN DEBUG] Password mismatch for ${cleanEmail} in table '${table}'`);
-          return res.status(401).json({ error: 'Invalid email or password.' });
-        }
-      }
-    }
-
-    console.warn(`[LOGIN DEBUG] No account found across any table for email: ${cleanEmail}`);
-    return res.status(401).json({ error: 'Invalid email or password.' });
-
-  } catch (err) {
-    console.error('❌ Unified login server error:', err);
-    res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// Start Server
+// 3. SINGLE Server Listen Call at the bottom
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(` Server listening on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });

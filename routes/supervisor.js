@@ -4,6 +4,7 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Apply auth middleware to all supervisor endpoints
 router.use(authMiddleware);
 
 // POST /api/supervisor/scan - QR Clock In or Out
@@ -87,7 +88,7 @@ router.post('/scan', requireRole('supervisor'), async (req, res) => {
 });
 
 // GET /api/supervisor/logs - Get all time logs
-router.get('/logs', async (req, res) => {
+router.get('/logs', requireRole('supervisor', 'dean', 'superadmin'), async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM time_logs ORDER BY date DESC, time_in DESC'
@@ -99,7 +100,7 @@ router.get('/logs', async (req, res) => {
 });
 
 // GET /api/supervisor/logs/:studentId - Logs for a specific student
-router.get('/logs/:studentId', async (req, res) => {
+router.get('/logs/:studentId', requireRole('supervisor', 'dean', 'superadmin'), async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM time_logs WHERE student_id = $1 ORDER BY date DESC',

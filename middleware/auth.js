@@ -1,7 +1,9 @@
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 
-const authMiddleware = (req, res, next) => {
+dotenv.config();
+
+export const authMiddleware = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
@@ -19,13 +21,13 @@ const authMiddleware = (req, res, next) => {
 };
 
 // Role-based middleware
-const requireRole = (...roles) => {
+export const requireRole = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
     }
     next();
   };
 };
 
-module.exports = { authMiddleware, requireRole };
+export default authMiddleware;
